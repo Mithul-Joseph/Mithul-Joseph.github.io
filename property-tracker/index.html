@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Property Tracker</title>
+
+  <!-- PWA Meta -->
+  <meta name="theme-color" content="#1d4ed8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Properties" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- PWA Icons (inline SVG as data URIs) -->
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231d4ed8'/><text y='.9em' font-size='70' x='12'>🏠</text></svg>" />
+
+  <!-- Inline Manifest -->
+  <script>
+    const manifestData = {
+      name: "Property Tracker",
+      short_name: "Properties",
+      description: "Track houses from Rightmove",
+      start_url: "./",
+      display: "standalone",
+      background_color: "#f8fafc",
+      theme_color: "#1d4ed8",
+      icons: [
+        { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231d4ed8'/><text y='.9em' font-size='70' x='12'>🏠</text></svg>", sizes: "192x192", type: "image/svg+xml" }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(manifestData)], { type: "application/json" });
+    const manifestURL = URL.createObjectURL(blob);
+    document.write(`<link rel="manifest" href="${manifestURL}" />`);
+  </script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;600&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #f8fafc;
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+      color: #111827;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Safe area for notched phones */
+    .safe-top { padding-top: env(safe-area-inset-top); }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+    button { font-family: 'DM Sans', sans-serif; }
+    input, select, textarea { font-family: 'DM Sans', sans-serif; }
+
+    /* Header */
+    #header {
+      background: #fff;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 16px 20px;
+      padding-top: calc(16px + env(safe-area-inset-top));
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    #header h1 { font-family: 'Fraunces', serif; font-size: 22px; font-weight: 700; color: #111827; }
+    #header p { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+    #add-btn {
+      background: #1d4ed8; color: #fff; border: none; border-radius: 10px;
+      padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+      box-shadow: 0 2px 8px rgba(29,78,216,0.3); white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Filter bar */
+    #filter-bar {
+      background: #fff;
+      border-bottom: 1px solid #f1f5f9;
+      padding: 10px 16px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    #filter-bar::-webkit-scrollbar { display: none; }
+    .filter-btn {
+      padding: 5px 14px; border-radius: 20px; border: 1px solid #e5e7eb;
+      background: #fff; color: #6b7280; font-size: 12px; font-weight: 600;
+      cursor: pointer; white-space: nowrap; font-family: 'DM Mono', monospace;
+      -webkit-tap-highlight-color: transparent; transition: all 0.15s;
+    }
+    .filter-btn.active { border-width: 2px; }
+
+    /* Main */
+    #main { max-width: 680px; margin: 0 auto; padding: 16px 16px 100px; }
+
+    /* Search row */
+    #search-row { display: flex; gap: 8px; margin-bottom: 16px; }
+    #search-input {
+      flex: 1; padding: 10px 14px; border: 1px solid #e5e7eb; border-radius: 10px;
+      font-size: 15px; background: #fff; outline: none; color: #111827;
+      -webkit-appearance: none;
+    }
+    #sort-select {
+      padding: 10px 10px; border: 1px solid #e5e7eb; border-radius: 10px;
+      font-size: 13px; font-family: 'DM Mono', monospace; background: #fff;
+      cursor: pointer; color: #374151; -webkit-appearance: none; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+      padding-right: 28px;
+    }
+
+    /* Cards */
+    .card {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 14px;
+      padding: 16px; margin-bottom: 10px; transition: box-shadow 0.2s;
+    }
+    .card:active { box-shadow: 0 4px 20px rgba(0,0,0,0.10); }
+    .card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .card-left { flex: 1; min-width: 0; }
+    .card-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
+    .card-address {
+      font-family: 'Fraunces', serif; font-size: 16px; font-weight: 600; color: #111827;
+      margin-bottom: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .card-price { font-size: 19px; font-weight: 700; color: #1d4ed8; font-family: 'DM Mono', monospace; }
+    .card-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+    .card-actions { display: flex; gap: 5px; }
+    .btn-sm {
+      font-size: 11px; border-radius: 6px; padding: 4px 9px; cursor: pointer;
+      border: 1px solid #e5e7eb; background: #f3f4f6; color: #374151;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-del { background: #fee2e2; border-color: #fecaca; color: #dc2626; }
+
+    /* Status badge */
+    .badge {
+      border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 600;
+      font-family: 'DM Mono', monospace; display: inline-flex; align-items: center;
+      gap: 4px; white-space: nowrap; border: 1px solid transparent;
+    }
+
+    /* Stars */
+    .stars { display: flex; gap: 2px; }
+    .star { font-size: 16px; background: none; border: none; padding: 0; cursor: default; line-height: 1; }
+    .star.interactive { cursor: pointer; font-size: 28px; }
+
+    /* Notes toggle */
+    .notes-toggle {
+      background: none; border: none; cursor: pointer; font-size: 12px; color: #6b7280;
+      padding: 6px 0 0; display: flex; align-items: center; gap: 4px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .notes-body {
+      margin-top: 8px; font-size: 13.5px; color: #374151; line-height: 1.6;
+      background: #f9fafb; border-radius: 8px; padding: 10px 14px;
+      border-left: 3px solid #e5e7eb;
+    }
+
+    /* Rightmove link */
+    .rm-link {
+      font-size: 11px; color: #3b82f6; text-decoration: none;
+      border: 1px solid #bfdbfe; border-radius: 6px; padding: 4px 9px;
+      font-family: 'DM Mono', monospace; white-space: nowrap;
+    }
+
+    /* Empty state */
+    #empty { text-align: center; padding: 60px 20px; }
+    #empty .emoji { font-size: 56px; margin-bottom: 16px; }
+    #empty h2 { font-family: 'Fraunces', serif; font-size: 22px; color: #374151; margin-bottom: 8px; }
+    #empty p { color: #9ca3af; font-size: 15px; }
+
+    /* Overlay */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 500;
+      display: flex; align-items: flex-end; justify-content: center;
+      padding: 0; animation: fadeIn 0.15s ease;
+    }
+    @media (min-width: 600px) {
+      .overlay { align-items: center; padding: 20px; }
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* Sheet / modal */
+    .sheet {
+      background: #fff; width: 100%; max-width: 560px;
+      border-radius: 20px 20px 0 0; padding: 20px 20px 0;
+      padding-bottom: env(safe-area-inset-bottom);
+      max-height: 92vh; overflow-y: auto; -webkit-overflow-scrolling: touch;
+      animation: slideUp 0.2s ease;
+    }
+    @media (min-width: 600px) {
+      .sheet { border-radius: 18px; max-height: 88vh; }
+    }
+    @keyframes slideUp { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .sheet-handle {
+      width: 36px; height: 4px; background: #e5e7eb; border-radius: 99px;
+      margin: 0 auto 16px; display: block;
+    }
+    @media (min-width: 600px) { .sheet-handle { display: none; } }
+    .sheet-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+    }
+    .sheet-title { font-family: 'Fraunces', serif; font-size: 20px; color: #111827; }
+    .sheet-close {
+      background: none; border: none; font-size: 22px; cursor: pointer; color: #9ca3af;
+      -webkit-tap-highlight-color: transparent; padding: 4px;
+    }
+
+    /* Form */
+    .form-group { margin-bottom: 14px; }
+    .form-label {
+      display: block; font-size: 11px; font-weight: 600; color: #6b7280;
+      font-family: 'DM Mono', monospace; letter-spacing: 0.05em;
+      text-transform: uppercase; margin-bottom: 5px;
+    }
+    .form-input {
+      width: 100%; padding: 11px 13px; border: 1px solid #e5e7eb; border-radius: 9px;
+      font-size: 15px; color: #111827; background: #fafafa; outline: none;
+      -webkit-appearance: none; transition: border-color 0.15s;
+    }
+    .form-input:focus { border-color: #93c5fd; background: #fff; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .form-textarea { min-height: 80px; resize: vertical; }
+    .form-actions {
+      display: flex; gap: 10px; justify-content: flex-end;
+      padding: 16px 0 20px;
+      position: sticky; bottom: 0; background: #fff;
+      border-top: 1px solid #f1f5f9; margin-top: 4px;
+    }
+    .btn-cancel {
+      padding: 11px 20px; border: 1px solid #e5e7eb; border-radius: 9px;
+      background: #f9fafb; cursor: pointer; font-size: 14px; color: #374151;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-save {
+      padding: 11px 24px; border: none; border-radius: 9px;
+      background: #1d4ed8; color: #fff; cursor: pointer; font-size: 14px;
+      font-weight: 600; -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Confirm delete */
+    .confirm-sheet {
+      background: #fff; width: 100%; max-width: 400px;
+      border-radius: 20px 20px 0 0; padding: 28px 24px;
+      padding-bottom: calc(28px + env(safe-area-inset-bottom));
+      text-align: center; animation: slideUp 0.2s ease;
+    }
+    @media (min-width: 600px) {
+      .confirm-sheet { border-radius: 16px; padding-bottom: 28px; }
+    }
+    .confirm-sheet .emoji { font-size: 40px; margin-bottom: 12px; }
+    .confirm-sheet h3 { font-family: 'Fraunces', serif; font-size: 20px; color: #111827; margin-bottom: 8px; }
+    .confirm-sheet p { font-size: 14px; color: #6b7280; line-height: 1.6; margin-bottom: 22px; }
+    .confirm-btns { display: flex; gap: 10px; justify-content: center; }
+    .btn-keep { padding: 11px 22px; border: 1px solid #e5e7eb; border-radius: 9px; background: #f9fafb; cursor: pointer; font-size: 14px; color: #374151; }
+    .btn-remove { padding: 11px 22px; border: none; border-radius: 9px; background: #ef4444; color: #fff; cursor: pointer; font-size: 14px; font-weight: 600; }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: calc(20px + env(safe-area-inset-bottom)); left: 50%;
+      transform: translateX(-50%) translateY(80px); background: #1f2937; color: #fff;
+      padding: 10px 20px; border-radius: 99px; font-size: 13px; font-weight: 500;
+      z-index: 9999; transition: transform 0.25s ease, opacity 0.25s ease; opacity: 0;
+      white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+    .count-label { font-size: 12px; color: #9ca3af; margin-bottom: 12px; font-family: 'DM Mono', monospace; }
+    .no-match { text-align: center; padding: 40px; color: #9ca3af; }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="header" class="safe-top">
+  <div>
+    <h1>🏠 Property Tracker</h1>
+    <p id="prop-count">0 properties saved</p>
+  </div>
+  <button id="add-btn" onclick="openForm(null)">+ Add</button>
+</div>
+
+<!-- Filter bar -->
+<div id="filter-bar"></div>
+
+<!-- Main content -->
+<div id="main">
+  <div id="search-row" style="display:none">
+    <input id="search-input" type="search" placeholder="🔍 Search address or notes..." oninput="render()" />
+    <select id="sort-select" onchange="render()">
+      <option value="newest">Newest</option>
+      <option value="oldest">Oldest</option>
+      <option value="price-asc">£ Low→High</option>
+      <option value="price-desc">£ High→Low</option>
+      <option value="rating">Top rated</option>
+    </select>
+  </div>
+  <div id="count-label" class="count-label" style="display:none"></div>
+  <div id="cards"></div>
+</div>
+
+<!-- Form sheet overlay -->
+<div id="form-overlay" class="overlay" style="display:none" onclick="handleOverlayClick(event,'form-overlay')">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <span class="sheet-handle"></span>
+    <div class="sheet-header">
+      <span class="sheet-title" id="form-title">Add Property</span>
+      <button class="sheet-close" onclick="closeForm()">✕</button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Rightmove URL</label>
+      <input class="form-input" id="f-url" type="url" placeholder="https://www.rightmove.co.uk/properties/..." />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Address *</label>
+      <input class="form-input" id="f-address" type="text" placeholder="e.g. 14 Oak Street, Manchester, M1 2AB" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Price (£)</label>
+        <input class="form-input" id="f-price" type="number" placeholder="350000" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Bedrooms</label>
+        <input class="form-input" id="f-bedrooms" type="number" placeholder="3" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-input" id="f-status">
+          <option value="liked">♥ Liked</option>
+          <option value="called">✆ Called</option>
+          <option value="viewed">◉ Viewed</option>
+          <option value="offer-made">✎ Offer Made</option>
+          <option value="rejected">✕ Rejected</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Date Viewed</label>
+        <input class="form-input" id="f-date" type="date" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Rating</label>
+      <div id="f-stars" class="stars" style="margin-top:4px"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes</label>
+      <textarea class="form-input form-textarea" id="f-notes" placeholder="E.g. Great garden, noisy road, needs new kitchen..."></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn-cancel" onclick="closeForm()">Cancel</button>
+      <button class="btn-save" onclick="saveProperty()">Save Property</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete confirm overlay -->
+<div id="del-overlay" class="overlay" style="display:none" onclick="handleOverlayClick(event,'del-overlay')">
+  <div class="confirm-sheet" onclick="event.stopPropagation()">
+    <span class="sheet-handle"></span>
+    <div class="emoji">🗑️</div>
+    <h3>Remove property?</h3>
+    <p><strong id="del-address" style="color:#374151"></strong> will be permanently removed from your tracker.</p>
+    <div class="confirm-btns">
+      <button class="btn-keep" onclick="closeDel()">Keep it</button>
+      <button class="btn-remove" onclick="confirmDelete()">Yes, remove</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+  const STORAGE_KEY = 'rightmove-properties-pwa';
+
+  const STATUS = {
+    liked:       { label: 'Liked',       color: '#f59e0b', bg: '#fef3c7', icon: '♥' },
+    called:      { label: 'Called',      color: '#3b82f6', bg: '#dbeafe', icon: '✆' },
+    viewed:      { label: 'Viewed',      color: '#8b5cf6', bg: '#ede9fe', icon: '◉' },
+    'offer-made':{ label: 'Offer Made',  color: '#10b981', bg: '#d1fae5', icon: '✎' },
+    rejected:    { label: 'Rejected',    color: '#ef4444', bg: '#fee2e2', icon: '✕' },
+  };
+
+  let properties = [];
+  let filterStatus = 'all';
+  let editingId = null;
+  let pendingDeleteId = null;
+  let formRating = 3;
+
+  // --- Storage ---
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) properties = JSON.parse(raw);
+    } catch(e) { properties = []; }
+  }
+  function save() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(properties));
+  }
+
+  // --- Toast ---
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // --- Filter bar ---
+  function renderFilterBar() {
+    const bar = document.getElementById('filter-bar');
+    const counts = {};
+    Object.keys(STATUS).forEach(k => counts[k] = properties.filter(p => p.status === k).length);
+    const totalVisible = Object.values(counts).some(c => c > 0);
+    bar.style.display = totalVisible ? 'flex' : 'none';
+
+    let html = `<button class="filter-btn ${filterStatus==='all'?'active':''}"
+      style="${filterStatus==='all'?'border-color:#1d4ed8;color:#1d4ed8;background:#eff6ff':''}"
+      onclick="setFilter('all')">All (${properties.length})</button>`;
+
+    Object.entries(STATUS).forEach(([k, v]) => {
+      if (!counts[k]) return;
+      const active = filterStatus === k;
+      html += `<button class="filter-btn ${active?'active':''}"
+        style="${active?`border-color:${v.color};color:${v.color};background:${v.bg}`:'color:#6b7280'}"
+        onclick="setFilter('${k}')">${v.icon} ${v.label} (${counts[k]})</button>`;
+    });
+    bar.innerHTML = html;
+  }
+
+  function setFilter(status) {
+    filterStatus = status;
+    render();
+  }
+
+  // --- Star rating (form) ---
+  function renderFormStars() {
+    const container = document.getElementById('f-stars');
+    let html = '';
+    for (let i = 1; i <= 5; i++) {
+      html += `<button type="button" class="star interactive" onclick="setRating(${i})"
+        style="color:${i<=formRating?'#f59e0b':'#d1d5db'}"
+        aria-label="${i} star">★</button>`;
+    }
+    container.innerHTML = html;
+  }
+
+  function setRating(n) {
+    formRating = n;
+    renderFormStars();
+  }
+
+  // --- Main render ---
+  function render() {
+    const search = document.getElementById('search-input').value.toLowerCase();
+    const sort = document.getElementById('sort-select').value;
+
+    const filtered = properties
+      .filter(p => filterStatus === 'all' || p.status === filterStatus)
+      .filter(p => !search || (p.address||'').toLowerCase().includes(search) || (p.notes||'').toLowerCase().includes(search))
+      .sort((a, b) => {
+        if (sort === 'newest') return b.createdAt - a.createdAt;
+        if (sort === 'oldest') return a.createdAt - b.createdAt;
+        if (sort === 'price-asc') return (parseInt(a.price)||0) - (parseInt(b.price)||0);
+        if (sort === 'price-desc') return (parseInt(b.price)||0) - (parseInt(a.price)||0);
+        if (sort === 'rating') return b.rating - a.rating;
+        return 0;
+      });
+
+    // Update count text
+    document.getElementById('prop-count').textContent =
+      `${properties.length} ${properties.length === 1 ? 'property' : 'properties'} saved`;
+
+    // Show/hide search row
+    document.getElementById('search-row').style.display = properties.length ? 'flex' : 'none';
+
+    // Count label
+    const cl = document.getElementById('count-label');
+    if (properties.length > 0 && filtered.length !== properties.length) {
+      cl.style.display = 'block';
+      cl.textContent = `Showing ${filtered.length} of ${properties.length}`;
+    } else {
+      cl.style.display = 'none';
+    }
+
+    renderFilterBar();
+
+    const container = document.getElementById('cards');
+
+    if (properties.length === 0) {
+      container.innerHTML = `
+        <div id="empty">
+          <div class="emoji">🏡</div>
+          <h2>No properties yet</h2>
+          <p>Start tracking houses — tap + Add above.</p>
+        </div>`;
+      return;
+    }
+
+    if (filtered.length === 0) {
+      container.innerHTML = `<div class="no-match">No properties match your filter.</div>`;
+      return;
+    }
+
+    container.innerHTML = filtered.map(p => {
+      const s = STATUS[p.status];
+      const price = p.price ? `£${parseInt(p.price).toLocaleString()}` : '—';
+      const stars = [1,2,3,4,5].map(i =>
+        `<span class="star" style="color:${i<=p.rating?'#f59e0b':'#d1d5db'}">★</span>`
+      ).join('');
+      const dateStr = p.dateViewed
+        ? new Date(p.dateViewed).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'})
+        : '';
+
+      return `
+        <div class="card" id="card-${p.id}">
+          <div class="card-top">
+            <div class="card-left">
+              <div class="card-meta">
+                <span class="badge" style="background:${s.bg};color:${s.color};border-color:${s.color}40">${s.icon} ${s.label}</span>
+                ${p.bedrooms ? `<span style="font-size:12px;color:#9ca3af;font-family:'DM Mono',monospace">🛏 ${p.bedrooms} bed</span>` : ''}
+                ${dateStr ? `<span style="font-size:12px;color:#9ca3af">${dateStr}</span>` : ''}
+              </div>
+              <div class="card-address" title="${escHtml(p.address)}">${escHtml(p.address || 'No address')}</div>
+              <div class="card-price">${price}</div>
+            </div>
+            <div class="card-right">
+              <div class="stars">${stars}</div>
+              <div class="card-actions">
+                ${p.url ? `<a class="rm-link" href="${escHtml(p.url)}" target="_blank" rel="noreferrer">Rightmove ↗</a>` : ''}
+                <button class="btn-sm" onclick="openForm('${p.id}')">Edit</button>
+                <button class="btn-sm btn-del" onclick="askDelete('${p.id}')">✕</button>
+              </div>
+            </div>
+          </div>
+          ${p.notes ? `
+            <button class="notes-toggle" onclick="toggleNotes('${p.id}',this)">▼ Show notes</button>
+            <div class="notes-body" id="notes-${p.id}" style="display:none">${escHtml(p.notes)}</div>
+          ` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  function escHtml(str) {
+    return (str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function toggleNotes(id, btn) {
+    const el = document.getElementById('notes-' + id);
+    const hidden = el.style.display === 'none';
+    el.style.display = hidden ? 'block' : 'none';
+    btn.textContent = hidden ? '▲ Hide notes' : '▼ Show notes';
+  }
+
+  // --- Form ---
+  function openForm(id) {
+    editingId = id;
+    formRating = 3;
+    const p = id ? properties.find(x => x.id === id) : null;
+    document.getElementById('form-title').textContent = p ? 'Edit Property' : 'Add Property';
+    document.getElementById('f-url').value = p?.url || '';
+    document.getElementById('f-address').value = p?.address || '';
+    document.getElementById('f-price').value = p?.price || '';
+    document.getElementById('f-bedrooms').value = p?.bedrooms || '';
+    document.getElementById('f-status').value = p?.status || 'liked';
+    document.getElementById('f-date').value = p?.dateViewed || '';
+    document.getElementById('f-notes').value = p?.notes || '';
+    formRating = p?.rating || 3;
+    renderFormStars();
+    document.getElementById('form-overlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => document.getElementById('f-address').focus(), 300);
+  }
+
+  function closeForm() {
+    document.getElementById('form-overlay').style.display = 'none';
+    document.body.style.overflow = '';
+    editingId = null;
+  }
+
+  function saveProperty() {
+    const address = document.getElementById('f-address').value.trim();
+    if (!address) {
+      document.getElementById('f-address').focus();
+      document.getElementById('f-address').style.borderColor = '#ef4444';
+      setTimeout(() => document.getElementById('f-address').style.borderColor = '', 1500);
+      return;
+    }
+    const form = {
+      url: document.getElementById('f-url').value.trim(),
+      address,
+      price: document.getElementById('f-price').value.trim(),
+      bedrooms: document.getElementById('f-bedrooms').value.trim(),
+      status: document.getElementById('f-status').value,
+      dateViewed: document.getElementById('f-date').value,
+      notes: document.getElementById('f-notes').value.trim(),
+      rating: formRating,
+    };
+    if (editingId) {
+      const idx = properties.findIndex(x => x.id === editingId);
+      if (idx !== -1) properties[idx] = { ...form, id: editingId, createdAt: properties[idx].createdAt, updatedAt: Date.now() };
+      toast('Property updated ✓');
+    } else {
+      properties.unshift({ ...form, id: crypto.randomUUID(), createdAt: Date.now(), updatedAt: Date.now() });
+      toast('Property added ✓');
+    }
+    save();
+    closeForm();
+    render();
+  }
+
+  // --- Delete ---
+  function askDelete(id) {
+    pendingDeleteId = id;
+    const p = properties.find(x => x.id === id);
+    document.getElementById('del-address').textContent = p?.address || 'This property';
+    document.getElementById('del-overlay').style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeDel() {
+    document.getElementById('del-overlay').style.display = 'none';
+    document.body.style.overflow = '';
+    pendingDeleteId = null;
+  }
+
+  function confirmDelete() {
+    if (!pendingDeleteId) return;
+    properties = properties.filter(x => x.id !== pendingDeleteId);
+    save();
+    closeDel();
+    render();
+    toast('Property removed');
+  }
+
+  function handleOverlayClick(e, id) {
+    if (e.target === document.getElementById(id)) {
+      if (id === 'form-overlay') closeForm();
+      if (id === 'del-overlay') closeDel();
+    }
+  }
+
+  // --- Keyboard ---
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeForm(); closeDel(); }
+  });
+
+  // --- Service Worker (for offline) ---
+  if ('serviceWorker' in navigator) {
+    const swCode = `
+      const CACHE = 'property-tracker-v1';
+      self.addEventListener('install', e => {
+        e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./', './index.html'])));
+        self.skipWaiting();
+      });
+      self.addEventListener('activate', e => {
+        e.waitUntil(clients.claim());
+      });
+      self.addEventListener('fetch', e => {
+        e.respondWith(
+          caches.match(e.request).then(cached => cached || fetch(e.request).catch(() => cached))
+        );
+      });
+    `;
+    const swBlob = new Blob([swCode], { type: 'application/javascript' });
+    const swURL = URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swURL).catch(() => {});
+  }
+
+  // --- Init ---
+  load();
+  render();
+</script>
+</body>
+</html>
